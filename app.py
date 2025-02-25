@@ -49,6 +49,7 @@ app.config['DEBUG'] = False
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 
+# Keep your existing UserCreds model and create_db_table function
 # User credentials model
 class UserCreds(db.Model):
     __tablename__ = 'new_user_creds'
@@ -104,7 +105,7 @@ def signup_page():
             if existing_email:
                 return jsonify({
                     "success": True,
-                    "redirect_url": url_for('login_page', username=name)
+                    "redirect_url": url_for('login_page')
                 })
 
             new_user = UserCreds(name=name, email=email, google_id=google_id)
@@ -153,28 +154,34 @@ def login_page():
         if request.is_json:
             data = request.json
             email = data.get("email")
-            password = data.get("ud")
+            google_id = data.get("sub")
+            user = UserCreds.query.filter_by(email=email, google_id=google_id).first()
+            if user:
+                return jsonify({
+                    "success": True,
+                    "redirect_url": url_for('user_endpoint', username=user.name)
+                })
+            return jsonify({"success": False, "error": "Invalid credentials"}), 401
         else:
             email = request.form.get("email")
             password = request.form.get("password")
 
-        if not all([email, password]):
-            flash('All fields are required!', 'error')
+            if not all([email, password]):
+                flash('All fields are required!', 'error')
+                return redirect(url_for('login_page'))
+
+            user = UserCreds.query.filter_by(email=email).first()
+            if user and bcrypt.check_password_hash(user.password, password):
+                return redirect(url_for('user_endpoint', username=user.name))
+
+            flash('Invalid Credentials, Please try again!', 'error')
             return redirect(url_for('login_page'))
-
-        user = UserCreds.query.filter_by(email=email).first()
-        if user and bcrypt.check_password_hash(user.password, password):
-            return (jsonify({"success": True, "redirect_url": url_for('user_endpoint', username=user.name)}) 
-                   if request.is_json else redirect(url_for('user_endpoint', username=user.name)))
-
-        flash('Invalid Credentials, Please try again!', 'error')
-        return (jsonify({"success": False, "redirect_url": url_for('login_page')})
-                if request.is_json else redirect(url_for('login_page')))
 
     except Exception as e:
         logger.error(f"Error in login: {str(e)}")
         flash('An error occurred during login. Please try again.', 'error')
         return redirect(url_for('login_page'))
+
 
 @app.route("/<username>", methods=['POST', 'GET'])
 def user_endpoint(username):
