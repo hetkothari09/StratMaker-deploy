@@ -18,17 +18,12 @@ load_dotenv()
 # Environment variables with better error handling
 model = os.getenv("MODEL", "gpt-3.5-turbo")
 api_key = os.getenv("API_KEY")
-database_url = os.getenv("DATABASE_URL")
-secret_key = os.getenv("SECRET_KEY")
+database_url = os.getenv("DATABASE_URL", "postgresql://stratmaker_user:PKXGSPdeeTvYOuMqtcipluaLqVvsE11p@dpg-cuuq419opnds73eint30-a.oregon-postgres.render.com/stratmaker")
+secret_key = os.getenv("SECRET_KEY", os.urandom(24))
 
 # Validate critical environment variables
 if not api_key:
     raise ValueError("OpenAI API key not found in environment variables")
-if not database_url:
-    raise ValueError("Database URL not found in environment variables")
-if not secret_key:
-    logger.warning("Secret key not found in environment variables, using random key")
-    secret_key = os.urandom(24)
 
 # Configure OpenAI client
 client = OpenAI(api_key=api_key)
@@ -48,14 +43,6 @@ app.config['DEBUG'] = False
 # Initialize extensions
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
-
-# Create tables on startup
-with app.app_context():
-    try:
-        db.create_all()
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}")
 
 # User credentials model
 class UserCreds(db.Model):
@@ -99,6 +86,30 @@ def create_db_table(email):
             logger.error(f"Error creating table for {email}: {str(e)}")
     
     return Table
+
+# Initialize database function
+def init_db():
+    with app.app_context():
+        try:
+            db.create_all()
+            logger.info("Database tables created successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error creating database tables: {str(e)}")
+            return False
+
+# Additional endpoint to initialize database
+@app.route('/init-db')
+def initialize_database():
+    try:
+        success = init_db()
+        if success:
+            return jsonify({"message": "Database initialized successfully"}), 200
+        return jsonify({"message": "Failed to initialize database"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Your existing routes remain the same
 
 @app.route("/", methods=['POST', 'GET'])
 def signup_page():
