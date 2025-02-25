@@ -182,7 +182,7 @@ def login_page():
         flash('An error occurred during login. Please try again.', 'error')
         return redirect(url_for('login_page'))
 
-
+        
 @app.route("/<username>", methods=['POST', 'GET'])
 def user_endpoint(username):
     try:
